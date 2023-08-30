@@ -2,48 +2,65 @@ import os
 import markdown
 import jinja2
 import yaml
+import logging
 
-# Load configuration from config.yaml
-with open('config.yaml', 'r') as config_file:
-    config = yaml.load(config_file, Loader=yaml.FullLoader)
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Create Jinja2 environment
-template_loader = jinja2.FileSystemLoader('templates')
-template_env = jinja2.Environment(loader=template_loader)
+def load_config(config_path):
+    with open(config_path, 'r') as config_file:
+        config = yaml.safe_load(config_file)
+    return config
 
-# Ensure the output directory exists
-if not os.path.exists(config['output_dir']):
-    os.makedirs(config['output_dir'])
+def read_markdown_file(file_path):
+    with open(file_path, 'r') as f:
+        return f.read()
 
-# Load templates
-base_template = template_env.get_template('base.html')
-post_template = template_env.get_template('post.html')
+def load_metadata(metadata_path):
+    metadata = {}
+    if os.path.exists(metadata_path):
+        with open(metadata_path, 'r') as md_file:
+            metadata = yaml.safe_load(md_file)
+    return metadata
 
-# Loop through all files in the content directory
-for filename in os.listdir(config['input_dir']):
-    if filename.endswith('.md'):
-        # Read the Markdown content
-        with open(os.path.join(config['input_dir'], filename), 'r') as f:
-            markdown_content = f.read()
+def generate_html_content(markdown_content):
+    return markdown.markdown(markdown_content)
 
-        # Convert Markdown to HTML
-        html_content = markdown.markdown(markdown_content)
+def generate_output(output_dir, output_filename, base_template, post_html):
+    final_html = base_template.render(content=post_html)
+    output_path = os.path.join(output_dir, output_filename)
+    with open(output_path, 'w') as f:
+        f.write(final_html)
+    logger.info(f"Generated: {output_path}")
 
-        # Get metadata if available
-        metadata = {}
-        metadata_file = os.path.join(config['input_dir'], os.path.splitext(filename)[0] + '.yaml')
-        if os.path.exists(metadata_file):
-            with open(metadata_file, 'r') as md_file:
-                metadata = yaml.load(md_file, Loader=yaml.FullLoader)
+def main():
+    config = load_config('config.yaml')
 
-        # Render the post template
-        post_html = post_template.render(content=html_content, metadata=metadata)
+    template_loader = jinja2.FileSystemLoader('templates')
+    template_env = jinja2.Environment(loader=template_loader)
 
-        # Create the corresponding HTML file in the output directory
-        output_filename = os.path.splitext(filename)[0] + '.html'
-        with open(os.path.join(config['output_dir'], output_filename), 'w') as f:
-            final_html = base_template.render(content=post_html)
-            f.write(final_html)
+    base_template = template_env.get_template('base.html')
+    post_template = template_env.get_template('post.html')
 
-print("Website generation complete.")
+    if not os.path.exists(config['output_dir']):
+        os.makedirs(config['output_dir'])
 
+    for filename in os.listdir(config['input_dir']):
+        if filename.endswith('.md'):
+            input_file_path = os.path.join(config['input_dir'], filename)
+            markdown_content = read_markdown_file(input_file_path)
+            html_content = generate_html_content(markdown_content)
+
+            metadata_path = os.path.join(config['input_dir'], os.path.splitext(filename)[0] + '.yaml')
+            metadata = load_metadata(metadata_path)
+
+            post_html = post_template.render(content=html_content, metadata=metadata)
+
+            output_filename = os.path.splitext(filename)[0] + '.html'
+            generate_output(config['output_dir'], output_filename, base_template, post_html)
+
+    logger.info("Website generation complete.")
+
+if __name__ == "__main__":
+    main()
