@@ -1,2 +1,0 @@
-input_dir: content     # Directory containing Markdown content
-output_dir: output     # Directory to save generated HTML files
